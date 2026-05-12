@@ -1,0 +1,55 @@
+{
+  "@@locale": "en",
+  "appTitle": "Mechanix Camera",
+  "@appTitle": {
+    "description": "Title for app"
+  },
+  "cameraNotInitialized": "Camera is not initialized.",
+  "@cameraNotInitialized": {
+    "description": "Error message shown when the camera is accessed before initialization"
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Retry button"
+  },
+  "galleryTitle": "Gallery",
+  "@galleryTitle": {
+    "description": "Title for gallery screen"
+  },
+  "capturedImage": "Captured Image",
+  "@capturedImage": {
+    "description": "Title for captured image"
+  },
+  "filters": "Filters",
+  "@filters": {
+    "description": "Title for filters screen"
+  },
+  "detectIssues": "Detect Issues",
+  "@detectIssues": {
+    "description": "Title for detect issues screen"
+  },
+  "scanTitle": "Scan",
+  "@scanTitle": {
+    "description": "Title for scan screen"
+  },
+  "reviewTitle": "Review",
+  "@reviewTitle": {
+    "description": "Title for review screen"
+  },
+  "aspectRatio43": "4:3",
+  "@aspectRatio43": {
+    "description": "Title for aspect ratio 4:3"
+  },
+  "aspectRatio169": "16:9",
+  "@aspectRatio169": {
+    "description": "Title for aspect ratio 16:9"
+  },
+  "aspectRatio11": "1:1",
+  "@aspectRatio11": {
+    "description": "Title for aspect ratio 1:1"
+  },
+  "aspectRatioFull": "Full",
+  "@aspectRatioFull": {
+    "description": "Title for aspect ratio full"
+  }
+}
