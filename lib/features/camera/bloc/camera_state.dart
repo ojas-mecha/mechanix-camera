@@ -38,6 +38,8 @@ final class CameraReady extends CameraState {
   List<Object?> get props => [lastCapturedPath, isSettingsOpen, settingsPanel];
 }
 
+final class CameraCaptureInProgress extends CameraState {}
+
 final class CameraError extends CameraState {
   final String message;
   const CameraError(this.message);

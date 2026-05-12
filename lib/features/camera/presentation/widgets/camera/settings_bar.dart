@@ -9,73 +9,108 @@ import 'package:mechanix_camera/features/camera/presentation/widgets/camera/sett
 class SettingsBar extends StatelessWidget {
   const SettingsBar({super.key});
 
+  static const _buttonStyle = ButtonStyle(
+    fixedSize: WidgetStatePropertyAll(Size(48, 48)),
+  );
+
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        BlocBuilder<CameraBloc, CameraState>(
-          builder: (context, state) {
-            return switch (state) {
-              CameraReady(settingsPanel: CameraSettingsPanel.aspectRatio) =>
-                const AspectRationBar(),
-              _ => const SizedBox.shrink(),
-            };
-          },
-        ),
-        Container(
-          height: 60,
-          width: double.infinity,
-          decoration: const BoxDecoration(borderRadius: BorderRadius.zero),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                style: const ButtonStyle(
-                  fixedSize: WidgetStatePropertyAll(Size(48, 48)),
-                ),
-                onPressed: () {
-                  context.read<CameraBloc>().add(CloseCameraWithSettings());
-                },
+      children: [_AspectRatioSection(), _BottomSettingsBar()],
+    );
+  }
+}
 
-                icon: const Images(
-                  image: AppConstants.close,
-                  size: Size(16, 16),
-                ),
-                color: Colors.black,
+class _AspectRatioSection extends StatelessWidget {
+  const _AspectRatioSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<CameraBloc, CameraState, CameraSettingsPanel>(
+      selector: (state) {
+        if (state is CameraReady) {
+          return state.settingsPanel;
+        }
+
+        return CameraSettingsPanel.none;
+      },
+      builder: (context, settingsPanel) {
+        if (settingsPanel != CameraSettingsPanel.aspectRatio) {
+          return const SizedBox.shrink();
+        }
+
+        return const AspectRationBar();
+      },
+    );
+  }
+}
+
+class _BottomSettingsBar extends StatelessWidget {
+  const _BottomSettingsBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [_CloseButton(), _AspectRatioButton()],
+      ),
+    );
+  }
+}
+
+class _CloseButton extends StatelessWidget {
+  const _CloseButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      style: SettingsBar._buttonStyle,
+      onPressed: () {
+        context.read<CameraBloc>().add(CloseCameraWithSettings());
+      },
+      icon: const Images(image: AppConstants.close, size: Size(16, 16)),
+    );
+  }
+}
+
+class _AspectRatioButton extends StatelessWidget {
+  const _AspectRatioButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<CameraBloc, CameraState, CameraSettingsPanel>(
+      selector: (state) {
+        if (state is CameraReady) {
+          return state.settingsPanel;
+        }
+
+        return CameraSettingsPanel.none;
+      },
+      builder: (context, settingsPanel) {
+        final isOpen = settingsPanel == CameraSettingsPanel.aspectRatio;
+
+        return IconButton(
+          style: SettingsBar._buttonStyle,
+          onPressed: () {
+            context.read<CameraBloc>().add(
+              OpenCameraWithSettings(
+                isOpen
+                    ? CameraSettingsPanel.none
+                    : CameraSettingsPanel.aspectRatio,
               ),
-              BlocBuilder<CameraBloc, CameraState>(
-                builder: (context, state) {
-                  return IconButton(
-                    style: const ButtonStyle(
-                      fixedSize: WidgetStatePropertyAll(Size(48, 48)),
-                    ),
-                    onPressed: () {
-                      context.read<CameraBloc>().add(
-                        state is CameraReady &&
-                                state.settingsPanel ==
-                                    CameraSettingsPanel.aspectRatio
-                            ? const OpenCameraWithSettings(
-                                CameraSettingsPanel.none,
-                              )
-                            : const OpenCameraWithSettings(
-                                CameraSettingsPanel.aspectRatio,
-                              ),
-                      );
-                    },
-                    icon: const Images(
-                      image: AppConstants.aspectRatio,
-                      size: Size(23, 20),
-                    ),
-                    color: Colors.black,
-                  );
-                },
-              ),
-            ],
+            );
+          },
+          icon: const Images(
+            image: AppConstants.aspectRatio,
+            size: Size(23, 20),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

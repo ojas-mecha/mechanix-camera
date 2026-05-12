@@ -82,6 +82,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (state is! CameraReady && _repository.controller == null) return;
 
     try {
+      emit(CameraCaptureInProgress());
+
       final imagePath = await _repository.capture();
 
       emit(CameraReady(lastCapturedPath: imagePath));

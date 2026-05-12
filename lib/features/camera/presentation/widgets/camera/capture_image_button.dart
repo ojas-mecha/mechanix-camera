@@ -15,28 +15,48 @@ class CapturedImageButton extends StatelessWidget {
       child: InkWell(
         onTap: () {
           context.read<CameraBloc>().add(LastCaptureImageRequested());
+
           Navigator.pushNamed(context, AppRoutes.capturedImageScreen);
         },
         customBorder: const CircleBorder(),
-        child: Container(
+        child: SizedBox(
           height: 48,
           width: 48,
-          decoration: const BoxDecoration(color: Colors.white),
-          child: BlocBuilder<CameraBloc, CameraState>(
-            builder: (context, state) {
-              if (state is CameraReady && state.lastCapturedPath != null) {
-                return Container(
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: FileImage(File(state.lastCapturedPath!)),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: BlocBuilder<CameraBloc, CameraState>(
+              builder: (context, state) {
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(-0.3, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+
+                  child: state is CameraReady && state.lastCapturedPath != null
+                      ? Image.file(
+                          File(state.lastCapturedPath!),
+                          key: ValueKey(state.lastCapturedPath),
+                          fit: BoxFit.cover,
+                          width: 48,
+                          height: 48,
+                        )
+                      : Container(
+                          key: const ValueKey('placeholder'),
+                          color: Colors.white,
+                        ),
                 );
-              } else {
-                return const SizedBox.shrink();
-              }
-            },
+              },
+            ),
           ),
         ),
       ),
