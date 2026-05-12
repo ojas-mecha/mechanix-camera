@@ -11,7 +11,9 @@ class CaptureButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          context.read<CameraBloc>().add(CameraCaptureRequested());
+          if (context.read<CameraBloc>().state is CameraReady) {
+            context.read<CameraBloc>().add(CameraCaptureRequested());
+          }
         },
         customBorder: const CircleBorder(),
         child: Container(
@@ -19,16 +21,13 @@ class CaptureButton extends StatelessWidget {
           width: 80,
           alignment: Alignment.center,
           decoration: const BoxDecoration(
-            shape: BoxShape.circle,
+            // shape: BoxShape.circle,
             color: Colors.white24,
           ),
           child: Container(
             height: 60,
             width: 60,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-            ),
+            decoration: const BoxDecoration(color: Colors.white),
           ),
         ),
       ),

@@ -1,0 +1,1 @@
+enum CameraSettingsPanel { aspectRatio, none }

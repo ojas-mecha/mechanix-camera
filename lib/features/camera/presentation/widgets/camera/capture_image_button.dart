@@ -21,15 +21,17 @@ class CapturedImageButton extends StatelessWidget {
         child: Container(
           height: 48,
           width: 48,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-          ),
+          decoration: const BoxDecoration(color: Colors.white),
           child: BlocBuilder<CameraBloc, CameraState>(
             builder: (context, state) {
               if (state is CameraReady && state.lastCapturedPath != null) {
-                return CircleAvatar(
-                  backgroundImage: FileImage(File(state.lastCapturedPath!)),
+                return Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: FileImage(File(state.lastCapturedPath!)),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 );
               } else {
                 return const SizedBox.shrink();
