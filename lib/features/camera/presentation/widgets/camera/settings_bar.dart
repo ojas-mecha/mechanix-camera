@@ -4,7 +4,7 @@ import 'package:mechanix_camera/core/utils/constants.dart';
 import 'package:mechanix_camera/core/utils/images.dart';
 import 'package:mechanix_camera/features/camera/bloc/camera_bloc.dart';
 import 'package:mechanix_camera/features/camera/model/camera_types.dart';
-import 'package:mechanix_camera/features/camera/presentation/widgets/camera/settings/aspect_ratio_bar.dart';
+import 'package:mechanix_camera/features/camera/presentation/widgets/camera/settings/selected_menu_bar.dart';
 
 class SettingsBar extends StatelessWidget {
   const SettingsBar({super.key});
@@ -17,31 +17,7 @@ class SettingsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Column(
       mainAxisSize: MainAxisSize.min,
-      children: [_AspectRatioSection(), _BottomSettingsBar()],
-    );
-  }
-}
-
-class _AspectRatioSection extends StatelessWidget {
-  const _AspectRatioSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<CameraBloc, CameraState, CameraSettingsPanel>(
-      selector: (state) {
-        if (state is CameraReady) {
-          return state.settingsPanel;
-        }
-
-        return CameraSettingsPanel.none;
-      },
-      builder: (context, settingsPanel) {
-        if (settingsPanel != CameraSettingsPanel.aspectRatio) {
-          return const SizedBox.shrink();
-        }
-
-        return const AspectRationBar();
-      },
+      children: [SelectedMenuBar(), _BottomSettingsBar()],
     );
   }
 }

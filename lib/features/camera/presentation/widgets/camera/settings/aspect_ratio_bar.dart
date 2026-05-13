@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_camera/l10n/app_localizations.dart';
 
-class AspectRationBar extends StatelessWidget {
-  const AspectRationBar({super.key});
+class AspectRatioBar extends StatelessWidget {
+  const AspectRatioBar({super.key});
 
   @override
   Widget build(BuildContext context) {

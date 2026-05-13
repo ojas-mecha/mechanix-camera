@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-double orientationToRadians(DeviceOrientation orientation) {
+double getRotationTurns(DeviceOrientation orientation) {
   switch (orientation) {
     case DeviceOrientation.landscapeLeft:
       return -0.25;

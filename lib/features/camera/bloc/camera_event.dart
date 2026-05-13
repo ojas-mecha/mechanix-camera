@@ -38,3 +38,12 @@ class GetAllStoredImages extends CameraEvent {
   @override
   List<Object> get props => [files];
 }
+
+class CameraCapturedImageSelected extends CameraEvent {
+  final String path;
+
+  const CameraCapturedImageSelected(this.path);
+
+  @override
+  List<Object> get props => [path];
+}

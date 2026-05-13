@@ -40,6 +40,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       _onCloseCameraWithSettings,
       transformer: droppable(),
     );
+    on<CameraCapturedImageSelected>(_onCapturedImageSelected);
     on<CameraDisposed>(_onCameraDisposed);
   }
 
@@ -106,6 +107,20 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
         CapturedImagePreview(
           lastCapturedPath: (state as CameraReady).lastCapturedPath!,
           files: files,
+        ),
+      );
+    }
+  }
+
+  void _onCapturedImageSelected(
+    CameraCapturedImageSelected event,
+    Emitter<CameraState> emit,
+  ) {
+    if (state is CapturedImagePreview) {
+      emit(
+        CapturedImagePreview(
+          lastCapturedPath: event.path,
+          files: (state as CapturedImagePreview).files,
         ),
       );
     }

@@ -13,7 +13,8 @@ class CameraFooter extends StatelessWidget {
     return BlocBuilder<CameraBloc, CameraState>(
       builder: (context, state) {
         return switch (state) {
-          CameraReady(isSettingsOpen: false) => const Row(
+          CameraReady(isSettingsOpen: false) ||
+          CameraCaptureInProgress() => const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
