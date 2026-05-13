@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mechanix_camera/features/camera/bloc/camera_bloc.dart';
 import 'package:mechanix_camera/features/camera/data/camera_repository.dart';
+import 'package:mechanix_camera/features/camera/model/camera_types.dart';
 import 'package:mocktail/mocktail.dart';
 
 // ---------------------------------------------------------------------------
@@ -12,12 +15,6 @@ import 'package:mocktail/mocktail.dart';
 class MockCameraRepository extends Mock implements CameraRepository {}
 
 class MockCameraController extends Mock implements CameraController {}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// CameraController _fakeController() => MockCameraController();
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -30,9 +27,8 @@ void main() {
   setUp(() {
     mockRepo = MockCameraRepository();
     mockController = MockCameraController();
-    // bloc_test closes the bloc after every test, which calls
-    // _repository.dispose() via CameraBloc.close(). Stub it globally
-    // so mocktail never returns null for a Future<void> method.
+    // CameraBloc.close() always calls _repository.dispose(), so stub it
+    // globally to avoid MissingStubError on every test teardown.
     when(() => mockRepo.dispose()).thenAnswer((_) async {});
   });
 
@@ -49,35 +45,44 @@ void main() {
     blocTest<CameraBloc, CameraState>(
       'emits [CameraLoading, CameraReady] on successful initialization',
       build: () {
+        // initialize() returns Future<CameraController> — must return the
+        // mock, not async {} (which would return null and fail the type check).
         when(
           () => mockRepo.initialize(),
         ).thenAnswer((_) async => mockController);
+        // The bloc also checks controller getter for null after initialize().
+        when(() => mockRepo.controller).thenReturn(mockController);
         return CameraBloc(mockRepo);
       },
-      act: (bloc) => bloc.add(CameraInitialized()),
+      act: (bloc) => bloc.add(const CameraInitialized()),
       expect: () => [isA<CameraLoading>(), isA<CameraReady>()],
     );
 
+    // ── controller == null after initialize → CameraError ────────────────
+    // initialize() itself succeeds but the getter returns null — this covers
+    // the explicit null-check inside _onCameraInitialized.
+
     blocTest<CameraBloc, CameraState>(
-      'CameraReady holds the controller returned by repository',
+      'emits [CameraLoading, CameraError] when controller is null after init',
       build: () {
         when(
           () => mockRepo.initialize(),
         ).thenAnswer((_) async => mockController);
+        when(() => mockRepo.controller).thenReturn(null);
         return CameraBloc(mockRepo);
       },
-      act: (bloc) => bloc.add(CameraInitialized()),
+      act: (bloc) => bloc.add(const CameraInitialized()),
       expect: () => [
         isA<CameraLoading>(),
-        isA<CameraReady>().having(
-          (s) => s.controller,
-          'controller',
-          mockController,
+        isA<CameraError>().having(
+          (s) => s.message,
+          'message',
+          'Something went wrong. Please restart the app.',
         ),
       ],
     );
 
-    // ── CameraException paths ────────────────────────────────────────────
+    // ── CameraAccessDenied ───────────────────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
       'emits [CameraLoading, CameraError] with permission message '
@@ -88,7 +93,7 @@ void main() {
         ).thenThrow(CameraException('CameraAccessDenied', 'Permission denied'));
         return CameraBloc(mockRepo);
       },
-      act: (bloc) => bloc.add(CameraInitialized()),
+      act: (bloc) => bloc.add(const CameraInitialized()),
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraError>().having(
@@ -99,6 +104,8 @@ void main() {
       ],
     );
 
+    // ── Other CameraException ────────────────────────────────────────────
+
     blocTest<CameraBloc, CameraState>(
       'emits [CameraLoading, CameraError] with description '
       'for other CameraExceptions',
@@ -108,7 +115,7 @@ void main() {
         ).thenThrow(CameraException('some_other_code', 'Lens broken'));
         return CameraBloc(mockRepo);
       },
-      act: (bloc) => bloc.add(CameraInitialized()),
+      act: (bloc) => bloc.add(const CameraInitialized()),
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraError>().having(
@@ -119,7 +126,7 @@ void main() {
       ],
     );
 
-    // ── Generic exception path ────────────────────────────────────────────
+    // ── Generic exception ────────────────────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
       'emits [CameraLoading, CameraError] on unexpected exception',
@@ -129,7 +136,7 @@ void main() {
         ).thenThrow(Exception('Something went wrong'));
         return CameraBloc(mockRepo);
       },
-      act: (bloc) => bloc.add(CameraInitialized()),
+      act: (bloc) => bloc.add(const CameraInitialized()),
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraError>().having(
@@ -140,11 +147,13 @@ void main() {
       ],
     );
 
-    // ── droppable transformer: duplicate events ignored ───────────────────
+    // ── droppable: only the first event is processed ─────────────────────
 
     blocTest<CameraBloc, CameraState>(
-      'ignores second CameraInitialized while first is in progress (droppable)',
+      'ignores subsequent CameraInitialized events while first is in '
+      'progress (droppable)',
       build: () {
+        when(() => mockRepo.controller).thenReturn(mockController);
         when(() => mockRepo.initialize()).thenAnswer((_) async {
           await Future.delayed(const Duration(milliseconds: 50));
           return mockController;
@@ -152,64 +161,56 @@ void main() {
         return CameraBloc(mockRepo);
       },
       act: (bloc) async {
-        bloc.add(CameraInitialized());
-        bloc.add(CameraInitialized()); // should be dropped
-        bloc.add(CameraInitialized()); // should be dropped
-        bloc.add(CameraInitialized()); // should be dropped
-        bloc.add(CameraInitialized()); // should be dropped
-        bloc.add(CameraInitialized()); // should be dropped
-        bloc.add(CameraInitialized()); // should be dropped
+        bloc.add(const CameraInitialized());
+        bloc.add(const CameraInitialized());
+        bloc.add(const CameraInitialized());
       },
-      // repository should only be called once
       verify: (_) => verify(() => mockRepo.initialize()).called(1),
     );
   });
 
+  // =========================================================================
   group('CameraCaptureRequested', () {
-    // Helper: puts the bloc into CameraReady state
-    // before we test capture behavior
+    // Puts the repository into a state where initialization succeeds.
     void arrangeReady() {
       when(() => mockRepo.initialize()).thenAnswer((_) async => mockController);
       when(() => mockRepo.controller).thenReturn(mockController);
     }
 
-    // ── Guard: does nothing when state is not CameraReady ─────────────────
+    // ── Guard: not CameraReady + null controller → no emission ────────────
 
     blocTest<CameraBloc, CameraState>(
       'does nothing when state is not CameraReady and controller is null',
       build: () {
-        // controller is null → repo.controller returns null
         when(() => mockRepo.controller).thenReturn(null);
         return CameraBloc(mockRepo);
       },
-      // State is CameraInitial (never initialized), fire capture
+      // Bloc starts in CameraInitial — never initialized.
       act: (bloc) => bloc.add(CameraCaptureRequested()),
-      expect: () => [], // nothing should be emitted
+      expect: () => [],
     );
 
     // ── Happy path ─────────────────────────────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
-      'emits CameraReady with imagePath on successful capture',
+      'emits CameraReady with lastCapturedPath on successful capture',
       build: () {
         arrangeReady();
-        // stub capture() to return a fake path
         when(
           () => mockRepo.capture(),
         ).thenAnswer((_) async => '/storage/images/photo.jpg');
         return CameraBloc(mockRepo);
       },
-      // First get into CameraReady, then capture
       act: (bloc) async {
-        bloc.add(CameraInitialized());
-        await Future.delayed(Duration.zero); // let init complete
+        bloc.add(const CameraInitialized());
+        await Future.delayed(Duration.zero);
         bloc.add(CameraCaptureRequested());
       },
       expect: () => [
         isA<CameraLoading>(),
-        isA<CameraReady>(), // after init
+        isA<CameraReady>(), // after init — no path yet
+        isA<CameraCaptureInProgress>(),
         isA<CameraReady>().having(
-          // after capture
           (s) => s.lastCapturedPath,
           'lastCapturedPath',
           '/storage/images/photo.jpg',
@@ -229,13 +230,14 @@ void main() {
         return CameraBloc(mockRepo);
       },
       act: (bloc) async {
-        bloc.add(CameraInitialized());
+        bloc.add(const CameraInitialized());
         await Future.delayed(Duration.zero);
         bloc.add(CameraCaptureRequested());
       },
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraReady>(),
+        isA<CameraCaptureInProgress>(),
         isA<CameraError>().having((s) => s.message, 'message', 'Disk full'),
       ],
     );
@@ -243,27 +245,28 @@ void main() {
     // ── Null description fallback ──────────────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
-      'emits CameraError with fallback message when CameraException description is null',
+      'emits CameraError with fallback message when '
+      'CameraException description is null',
       build: () {
         arrangeReady();
-        // description is null → should fall back to 'Capture failed'
         when(
           () => mockRepo.capture(),
         ).thenThrow(CameraException('unknown', null));
         return CameraBloc(mockRepo);
       },
       act: (bloc) async {
-        bloc.add(CameraInitialized());
+        bloc.add(const CameraInitialized());
         await Future.delayed(Duration.zero);
         bloc.add(CameraCaptureRequested());
       },
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraReady>(),
+        isA<CameraCaptureInProgress>(),
         isA<CameraError>().having(
           (s) => s.message,
           'message',
-          'Capture failed', // the ?? fallback in your bloc
+          'Capture failed',
         ),
       ],
     );
@@ -280,13 +283,14 @@ void main() {
         return CameraBloc(mockRepo);
       },
       act: (bloc) async {
-        bloc.add(CameraInitialized());
+        bloc.add(const CameraInitialized());
         await Future.delayed(Duration.zero);
         bloc.add(CameraCaptureRequested());
       },
       expect: () => [
         isA<CameraLoading>(),
         isA<CameraReady>(),
+        isA<CameraCaptureInProgress>(),
         isA<CameraError>().having(
           (s) => s.message,
           'message',
@@ -298,11 +302,16 @@ void main() {
 
   // =========================================================================
   group('LastCaptureImageRequested', () {
+    // ── Happy path ────────────────────────────────────────────────────────
+
     blocTest<CameraBloc, CameraState>(
-      'emits CapturedImagePreview when state is CameraReady with a captured path',
-      build: () => CameraBloc(mockRepo),
-      seed: () =>
-          CameraReady(mockController, lastCapturedPath: 'captured_0000.jpg'),
+      'emits CapturedImagePreview with lastCapturedPath '
+      'when state is CameraReady with a captured path',
+      build: () {
+        when(() => mockRepo.getAllStoredImages()).thenAnswer((_) async => []);
+        return CameraBloc(mockRepo);
+      },
+      seed: () => const CameraReady(lastCapturedPath: 'captured_0000.jpg'),
       act: (bloc) => bloc.add(LastCaptureImageRequested()),
       expect: () => [
         isA<CapturedImagePreview>().having(
@@ -313,13 +322,38 @@ void main() {
       ],
     );
 
+    // ── files forwarded from repository ───────────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'CapturedImagePreview.files matches what repository returns',
+      build: () {
+        when(
+          () => mockRepo.getAllStoredImages(),
+        ).thenAnswer((_) async => [File('a.jpg'), File('b.jpg')]);
+        return CameraBloc(mockRepo);
+      },
+      seed: () => const CameraReady(lastCapturedPath: 'captured_0000.jpg'),
+      act: (bloc) => bloc.add(LastCaptureImageRequested()),
+      expect: () => [
+        isA<CapturedImagePreview>().having(
+          (s) => s.files.length,
+          'files.length',
+          2,
+        ),
+      ],
+    );
+
+    // ── Guard: no lastCapturedPath → no emission ───────────────────────────
+
     blocTest<CameraBloc, CameraState>(
       'does nothing when CameraReady has no lastCapturedPath',
       build: () => CameraBloc(mockRepo),
-      seed: () => CameraReady(mockController), // no path
+      seed: () => const CameraReady(), // lastCapturedPath is null
       act: (bloc) => bloc.add(LastCaptureImageRequested()),
-      expect: () => [], // no state change
+      expect: () => [],
     );
+
+    // ── Guard: wrong state → no emission ──────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
       'does nothing when state is not CameraReady',
@@ -332,25 +366,30 @@ void main() {
 
   // =========================================================================
   group('CloseImagePreview', () {
+    // ── Happy path ────────────────────────────────────────────────────────
+
     blocTest<CameraBloc, CameraState>(
-      'emits CameraReady with preserved lastCapturedPath when preview is closed',
+      'emits CameraReady preserving lastCapturedPath when preview is closed',
       build: () {
         when(() => mockRepo.controller).thenReturn(mockController);
         return CameraBloc(mockRepo);
       },
-      seed: () =>
-          const CapturedImagePreview(lastCapturedPath: 'captured_0000.jpg'),
+      // CapturedImagePreview.files is required — use an empty list.
+      seed: () => const CapturedImagePreview(
+        lastCapturedPath: 'captured_0000.jpg',
+        files: [],
+      ),
       act: (bloc) => bloc.add(CloseImagePreview()),
       expect: () => [
-        isA<CameraReady>()
-            .having((s) => s.controller, 'controller', mockController)
-            .having(
-              (s) => s.lastCapturedPath,
-              'lastCapturedPath',
-              'captured_0000.jpg',
-            ),
+        isA<CameraReady>().having(
+          (s) => s.lastCapturedPath,
+          'lastCapturedPath',
+          'captured_0000.jpg',
+        ),
       ],
     );
+
+    // ── Guard: wrong state → no emission ──────────────────────────────────
 
     blocTest<CameraBloc, CameraState>(
       'does nothing when state is not CapturedImagePreview',
@@ -358,20 +397,235 @@ void main() {
         when(() => mockRepo.controller).thenReturn(mockController);
         return CameraBloc(mockRepo);
       },
-      seed: () => CameraReady(mockController),
+      seed: () => const CameraReady(),
       act: (bloc) => bloc.add(CloseImagePreview()),
       expect: () => [],
     );
 
+    // ── Guard: null controller → no emission ──────────────────────────────
+
     blocTest<CameraBloc, CameraState>(
-      'does nothing when controller is null even if in preview state',
+      'does nothing when controller is null even if state is CapturedImagePreview',
       build: () {
-        when(() => mockRepo.controller).thenReturn(null); // controller gone
+        when(() => mockRepo.controller).thenReturn(null);
         return CameraBloc(mockRepo);
       },
-      seed: () =>
-          const CapturedImagePreview(lastCapturedPath: 'captured_0000.jpg'),
+      seed: () => const CapturedImagePreview(
+        lastCapturedPath: 'captured_0000.jpg',
+        files: [],
+      ),
       act: (bloc) => bloc.add(CloseImagePreview()),
+      expect: () => [],
+    );
+  });
+
+  // =========================================================================
+  group('OpenCameraWithSettings', () {
+    // OpenCameraWithSettings takes a positional CameraSettingsPanel argument.
+    // The enum only has: aspectRatio, none.
+
+    blocTest<CameraBloc, CameraState>(
+      'emits CameraReady with isSettingsOpen=true and correct panel',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraReady(),
+      act: (bloc) => bloc.add(
+        const OpenCameraWithSettings(CameraSettingsPanel.aspectRatio),
+      ),
+      expect: () => [
+        isA<CameraReady>()
+            .having((s) => s.isSettingsOpen, 'isSettingsOpen', true)
+            .having(
+              (s) => s.settingsPanel,
+              'settingsPanel',
+              CameraSettingsPanel.aspectRatio,
+            ),
+      ],
+    );
+
+    // ── Preserves other CameraReady fields via copyWith ───────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'preserves lastCapturedPath when opening settings',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraReady(lastCapturedPath: 'photo.jpg'),
+      act: (bloc) => bloc.add(
+        const OpenCameraWithSettings(CameraSettingsPanel.aspectRatio),
+      ),
+      expect: () => [
+        isA<CameraReady>().having(
+          (s) => s.lastCapturedPath,
+          'lastCapturedPath',
+          'photo.jpg',
+        ),
+      ],
+    );
+
+    // ── Guard: wrong state → no emission ──────────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is not CameraReady',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CameraInitial(),
+      act: (bloc) => bloc.add(
+        const OpenCameraWithSettings(CameraSettingsPanel.aspectRatio),
+      ),
+      expect: () => [],
+    );
+  });
+
+  // =========================================================================
+  group('CloseCameraWithSettings', () {
+    blocTest<CameraBloc, CameraState>(
+      'emits CameraReady with isSettingsOpen=false and panel reset to none',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraReady(
+        isSettingsOpen: true,
+        settingsPanel: CameraSettingsPanel.aspectRatio,
+      ),
+      act: (bloc) => bloc.add(CloseCameraWithSettings()),
+      expect: () => [
+        isA<CameraReady>()
+            .having((s) => s.isSettingsOpen, 'isSettingsOpen', false)
+            .having(
+              (s) => s.settingsPanel,
+              'settingsPanel',
+              CameraSettingsPanel.none,
+            ),
+      ],
+    );
+
+    // ── Preserves other CameraReady fields via copyWith ───────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'preserves lastCapturedPath when closing settings',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraReady(
+        lastCapturedPath: 'photo.jpg',
+        isSettingsOpen: true,
+        settingsPanel: CameraSettingsPanel.aspectRatio,
+      ),
+      act: (bloc) => bloc.add(CloseCameraWithSettings()),
+      expect: () => [
+        isA<CameraReady>().having(
+          (s) => s.lastCapturedPath,
+          'lastCapturedPath',
+          'photo.jpg',
+        ),
+      ],
+    );
+
+    // ── Guard: wrong state → no emission ──────────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is not CameraReady',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CameraInitial(),
+      act: (bloc) => bloc.add(CloseCameraWithSettings()),
+      expect: () => [],
+    );
+  });
+
+  // =========================================================================
+  group('CameraCapturedImageSelected', () {
+    // const existingFiles = []; // files preserved from current preview state
+
+    // ── Happy path ────────────────────────────────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'emits CapturedImagePreview with the selected path',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CapturedImagePreview(
+        lastCapturedPath: 'old_image.jpg',
+        files: [],
+      ),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
+      expect: () => [
+        isA<CapturedImagePreview>().having(
+          (s) => s.lastCapturedPath,
+          'lastCapturedPath',
+          'new_image.jpg',
+        ),
+      ],
+    );
+
+    // ── files are preserved from the existing state ───────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'preserves files from the current CapturedImagePreview state',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CapturedImagePreview(
+        lastCapturedPath: 'old_image.jpg',
+        files: [File('a.jpg'), File('b.jpg')],
+      ),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
+      expect: () => [
+        isA<CapturedImagePreview>().having(
+          (s) => s.files.length,
+          'files.length',
+          2,
+        ),
+      ],
+    );
+
+    // ── path is updated, files are unchanged ─────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'updates path and keeps files in the same emission',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CapturedImagePreview(
+        lastCapturedPath: 'old_image.jpg',
+        files: [File('a.jpg')],
+      ),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('selected_image.jpg')),
+      expect: () => [
+        isA<CapturedImagePreview>()
+            .having(
+              (s) => s.lastCapturedPath,
+              'lastCapturedPath',
+              'selected_image.jpg',
+            )
+            .having((s) => s.files.length, 'files.length', 1),
+      ],
+    );
+
+    // ── Guard: wrong state → no emission ──────────────────────────────────
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is CameraInitial',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CameraInitial(),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
+      expect: () => [],
+    );
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is CameraReady',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraReady(lastCapturedPath: 'old_image.jpg'),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
+      expect: () => [],
+    );
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is CameraLoading',
+      build: () => CameraBloc(mockRepo),
+      seed: () => CameraLoading(),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
+      expect: () => [],
+    );
+
+    blocTest<CameraBloc, CameraState>(
+      'does nothing when state is CameraError',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraError('some error'),
+      act: (bloc) =>
+          bloc.add(const CameraCapturedImageSelected('new_image.jpg')),
       expect: () => [],
     );
   });
@@ -381,22 +635,34 @@ void main() {
     blocTest<CameraBloc, CameraState>(
       'calls repository.dispose() and emits CameraInitial',
       build: () => CameraBloc(mockRepo),
-      seed: () => CameraReady(mockController),
+      seed: () => const CameraReady(),
       act: (bloc) => bloc.add(CameraDisposed()),
       expect: () => [isA<CameraInitial>()],
-      // dispose() is called for the event AND when bloc_test closes the bloc
+      // dispose() fires once for the event and once when bloc_test closes
+      // the bloc — accept any count >= 1.
       verify: (_) =>
           verify(() => mockRepo.dispose()).called(greaterThanOrEqualTo(1)),
+    );
+
+    blocTest<CameraBloc, CameraState>(
+      'emits CameraInitial regardless of current state',
+      build: () => CameraBloc(mockRepo),
+      seed: () => const CameraError('some error'),
+      act: (bloc) => bloc.add(CameraDisposed()),
+      expect: () => [isA<CameraInitial>()],
     );
   });
 
   // =========================================================================
   group('close()', () {
-    test('calls repository.dispose() when bloc is closed', () async {
-      final bloc = CameraBloc(mockRepo);
-      await bloc.close();
+    test(
+      'calls repository.dispose() exactly once when bloc is closed',
+      () async {
+        final bloc = CameraBloc(mockRepo);
+        await bloc.close();
 
-      verify(() => mockRepo.dispose()).called(1);
-    });
+        verify(() => mockRepo.dispose()).called(1);
+      },
+    );
   });
 }

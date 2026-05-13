@@ -4,39 +4,36 @@ import 'package:mechanix_camera/core/utils/app_routes.dart';
 import 'package:mechanix_camera/features/camera/bloc/camera_bloc.dart';
 import 'package:mechanix_camera/features/camera/bloc/camera_settings/camera_settings_bloc.dart';
 import 'package:mechanix_camera/features/camera/data/camera_repository.dart';
-import 'package:mechanix_camera/features/camera/data/camera_repository_impl.dart';
-import 'package:mechanix_camera/features/camera/presentation/screen/camera_screen.dart';
 import 'package:mechanix_camera/l10n/app_localizations.dart';
 
-void main() {
-  runApp(const CameraApp());
-}
+class TestAppWrapper extends StatelessWidget {
+  final Widget child;
+  final CameraRepository repository;
 
-class CameraApp extends StatelessWidget {
-  const CameraApp({super.key});
+  const TestAppWrapper({
+    super.key,
+    required this.child,
+    required this.repository,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<CameraRepository>(
-          create: (context) => CameraRepositoryImpl(),
-        ),
+        RepositoryProvider<CameraRepository>(create: (_) => repository),
       ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
-            create: (context) =>
-                CameraBloc(context.read<CameraRepository>())
+            create: (ctx) =>
+                CameraBloc(ctx.read<CameraRepository>())
                   ..add(const CameraInitialized()),
           ),
           BlocProvider(
-            create: (context) =>
-                CameraSettingsBloc(context.read<CameraRepository>()),
+            create: (ctx) => CameraSettingsBloc(ctx.read<CameraRepository>()),
           ),
         ],
         child: MaterialApp(
-          title: 'Mechanix Camera',
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           themeMode: ThemeMode.dark,
@@ -46,12 +43,11 @@ class CameraApp extends StatelessWidget {
               brightness: Brightness.dark,
             ),
           ),
-          debugShowCheckedModeBanner: false,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           ),
           routes: AppRoutes.routes,
-          home: const CameraScreen(),
+          home: child,
         ),
       ),
     );
