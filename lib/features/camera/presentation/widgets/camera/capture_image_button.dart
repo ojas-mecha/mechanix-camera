@@ -35,24 +35,22 @@ class CapturedImageButton extends StatelessWidget {
                       switchInCurve: Curves.easeOut,
                       switchOutCurve: Curves.easeIn,
                       transitionBuilder: (child, animation) {
-                        return SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(-0.3, 0),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child:
-                              FadeTransition(opacity: animation, child: child),
+                        return ScaleTransition(
+                          scale: Tween<double>(begin: 0.0, end: 1.0).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutBack,
+                            ),
+                          ),
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
                         );
                       },
-                      child: state is CameraReady &&
-                              state.lastCapturedPath != null
-                          ? Image.file(
-                              File(state.lastCapturedPath!),
-                              key: ValueKey(state.lastCapturedPath),
-                              fit: BoxFit.cover,
-                              width: 48,
-                              height: 48,
-                            )
+                      child:
+                          state is CameraReady && state.lastCapturedPath != null
+                          ? _ImageTile(path: state.lastCapturedPath!)
                           : Container(
                               key: const ValueKey('placeholder'),
                               color: Colors.white,
@@ -65,6 +63,23 @@ class CapturedImageButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ImageTile extends StatelessWidget {
+  const _ImageTile({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.file(
+      File(path),
+      key: ValueKey(path),
+      fit: BoxFit.cover,
+      width: 48,
+      height: 48,
     );
   }
 }
